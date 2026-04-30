@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:file-transfer-test;MODE=LEGACY;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  data:
+    redis:
+      repositories:
+        enabled: false
+  h2:
+    console:
+      enabled: false
+
+transfer:
+  redis-enabled: false
+
+logging:
+  file:
+    path: ./target/test-logs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

@@ -1,0 +1,86 @@
+spring:
+  application:
+    name: file-transfer-system
+  datasource:
+    url: jdbc:h2:file:./data/file-transfer-db;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 1000
+        order_inserts: true
+        order_updates: true
+        jdbc.batch_versioned_data: true
+  data:
+    redis:
+      repositories:
+        enabled: false
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+server:
+  port: 8080
+
+logging:
+  file:
+    path: ./logs
+
+transfer:
+  max-concurrency: 4
+  buffer-size: 1048576
+  max-retries: 3
+  initial-retry-interval-millis: 1000
+  hash-algorithm: SHA-256
+  temp-dir: ./temp-transfer
+  progress-save-interval-bytes: 67108864
+  scalable-batch-file-count: 10000
+  scalable-batch-bytes: 8589934592
+  scalable-persist-chunk-size: 1000
+  scalable-execution-batch-page-size: 4
+  scalable-execution-file-page-size: 1000
+  query-default-page-size: 100
+  scheduling-prefetch-multiplier: 4
+  backpressure-high-watermark-percent: 85
+  max-in-flight-bytes: 34359738368
+  hot-batch-bytes-threshold: 536870912
+  warm-batch-bytes-threshold: 4294967296
+  hot-batch-file-count-threshold: 2000
+  cold-batch-concurrency-limit: 1
+  hot-dispatch-burst: 4
+  warm-dispatch-burst: 2
+  cold-dispatch-burst: 1
+  dispatch-throttle-sleep-millis: 100
+  scanning-pipeline-queue-capacity: 5000
+  state-flush-batch-size: 500
+  state-flush-interval-millis: 500
+  redis-enabled: false
+  redis-key-prefix: file-transfer
+  redis-state-ttl-seconds: 172800
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: large-scale local file transfer service
+    java-version: 21
