@@ -29,7 +29,7 @@
 - Spring Data JPA
 - Spring Validation
 - Spring Boot Actuator
-- H2 Database
+- PostgreSQL
 - Redis（可选）
 
 ## 3. 快速开始
@@ -38,6 +38,7 @@
 
 - JDK 21+
 - Maven 3.9+
+- PostgreSQL 15+
 
 ### 3.2 本地构建
 
@@ -62,12 +63,6 @@ http://localhost:8080
 
 ```text
 http://localhost:8080/actuator/health
-```
-
-H2 控制台：
-
-```text
-http://localhost:8080/h2-console
 ```
 
 ## 4. 核心接口

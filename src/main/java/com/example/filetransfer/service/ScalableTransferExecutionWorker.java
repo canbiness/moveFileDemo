@@ -10,12 +10,11 @@ import com.example.filetransfer.domain.TransferTask;
 import com.example.filetransfer.exception.TaskCancelRequestedException;
 import com.example.filetransfer.exception.TaskPauseRequestedException;
 import com.example.filetransfer.exception.TransferException;
-import com.example.filetransfer.repository.ScalableFileRecordRepository;
-import com.example.filetransfer.repository.TransferBatchRepository;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.filetransfer.mapper.ScalableFileRecordMapper;
+import com.example.filetransfer.mapper.TransferBatchMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Slice;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
@@ -51,8 +50,8 @@ public class ScalableTransferExecutionWorker {
     private final ScalableRuntimeMonitorService scalableRuntimeMonitorService;
     private final ScalableSchedulingService scalableSchedulingService;
     private final DispatchQueueStore dispatchQueueStore;
-    private final TransferBatchRepository transferBatchRepository;
-    private final ScalableFileRecordRepository scalableFileRecordRepository;
+    private final TransferBatchMapper transferBatchMapper;
+    private final ScalableFileRecordMapper scalableFileRecordMapper;
     private final ThreadPoolTaskExecutor transferExecutor;
 
     public ScalableTransferExecutionWorker(TransferProperties transferProperties,
@@ -64,8 +63,8 @@ public class ScalableTransferExecutionWorker {
                                            ScalableRuntimeMonitorService scalableRuntimeMonitorService,
                                            ScalableSchedulingService scalableSchedulingService,
                                            DispatchQueueStore dispatchQueueStore,
-                                           TransferBatchRepository transferBatchRepository,
-                                           ScalableFileRecordRepository scalableFileRecordRepository,
+                                           TransferBatchMapper transferBatchMapper,
+                                           ScalableFileRecordMapper scalableFileRecordMapper,
                                            @Qualifier("transferExecutor") ThreadPoolTaskExecutor transferExecutor) {
         this.transferProperties = transferProperties;
         this.statePersistenceService = statePersistenceService;
@@ -76,8 +75,8 @@ public class ScalableTransferExecutionWorker {
         this.scalableRuntimeMonitorService = scalableRuntimeMonitorService;
         this.scalableSchedulingService = scalableSchedulingService;
         this.dispatchQueueStore = dispatchQueueStore;
-        this.transferBatchRepository = transferBatchRepository;
-        this.scalableFileRecordRepository = scalableFileRecordRepository;
+        this.transferBatchMapper = transferBatchMapper;
+        this.scalableFileRecordMapper = scalableFileRecordMapper;
         this.transferExecutor = transferExecutor;
     }
 
@@ -270,25 +269,26 @@ public class ScalableTransferExecutionWorker {
         while (!aborted.get()) {
             checkpointControl(taskId);
 
-            Slice<ScalableFileRecord> fileSlice = scalableFileRecordRepository
-                    .findByTaskIdAndBatchIdAndStatusInAndIdGreaterThanOrderByIdAsc(
-                            taskId,
-                            batch.getId(),
-                            activeFileStatuses,
-                            fileCursor,
-                            PageRequest.of(0, filePageSize)
-                    );
+            List<ScalableFileRecord> fileRecords = scalableFileRecordMapper.selectList(
+                    new LambdaQueryWrapper<ScalableFileRecord>()
+                            .eq(ScalableFileRecord::getTaskId, taskId)
+                            .eq(ScalableFileRecord::getBatchId, batch.getId())
+                            .in(ScalableFileRecord::getStatus, activeFileStatuses)
+                            .gt(ScalableFileRecord::getId, fileCursor)
+                            .orderByAsc(ScalableFileRecord::getId)
+                            .last("limit " + filePageSize)
+            );
 
-            if (fileSlice.isEmpty()) {
+            if (fileRecords.isEmpty()) {
                 log.debug("No more runnable file records for batch, taskId={}, batchId={}, fileCursor={}",
                         taskId, batch.getId(), fileCursor);
                 break;
             }
 
             log.debug("Loaded file slice, taskId={}, batchId={}, fileCursor={}, sliceSize={}",
-                    taskId, batch.getId(), fileCursor, fileSlice.getNumberOfElements());
+                    taskId, batch.getId(), fileCursor, fileRecords.size());
 
-            for (ScalableFileRecord record : fileSlice.getContent()) {
+            for (ScalableFileRecord record : fileRecords) {
                 if (aborted.get()) {
                     return;
                 }
@@ -462,17 +462,11 @@ public class ScalableTransferExecutionWorker {
         dispatchQueueStore.clearTask(taskId);
         int batchCursor = 0;
         while (true) {
-            Slice<TransferBatch> batchSlice = transferBatchRepository
-                    .findByTaskIdAndStatusInAndBatchNumberGreaterThanOrderByBatchNumberAsc(
-                            taskId,
-                            statuses,
-                            batchCursor,
-                            PageRequest.of(0, pageSize)
-                    );
-            if (batchSlice.isEmpty()) {
+            List<TransferBatch> batchRecords = transferBatchMapper.selectNextBatches(taskId, statuses, batchCursor, pageSize);
+            if (batchRecords.isEmpty()) {
                 break;
             }
-            for (TransferBatch batch : batchSlice.getContent()) {
+            for (TransferBatch batch : batchRecords) {
                 dispatchQueueStore.enqueueBatch(taskId, batch);
                 batchCursor = batch.getBatchNumber();
             }
@@ -485,7 +479,7 @@ public class ScalableTransferExecutionWorker {
      */
     private List<TransferBatch> loadBatchesByIds(List<Long> batchIds) {
         Map<Long, TransferBatch> batchMap = new HashMap<>();
-        for (TransferBatch batch : transferBatchRepository.findAllById(batchIds)) {
+        for (TransferBatch batch : transferBatchMapper.selectByIds(batchIds)) {
             batchMap.put(batch.getId(), batch);
         }
         return batchIds.stream()
