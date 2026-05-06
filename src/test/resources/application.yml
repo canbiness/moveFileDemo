@@ -4,8 +4,6 @@ spring:
     driver-class-name: org.postgresql.Driver
     username: ${SPRING_DATASOURCE_USERNAME:canbinesss}
     password: "${FILE_TRANSFER_DB_PASSWORD:${SPRING_DATASOURCE_PASSWORD:${PGPASSWORD:canbinesss}}}"
-  flyway:
-    enabled: false
   sql:
     init:
       mode: always
