@@ -1,0 +1,22 @@
+# Build output
+target/
+out/
+
+# Runtime and temporary files
+logs/
+temp-transfer/
+data/*.db
+data/*.mv.db
+data/*.trace.db
+
+# IDE files
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test and tool caches
+.pytest_cache/
+.mvn/
