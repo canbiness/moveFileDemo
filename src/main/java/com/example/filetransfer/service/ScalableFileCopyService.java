@@ -19,7 +19,7 @@ import java.nio.file.attribute.FileTime;
 
 /**
  * 单文件复制服务。
- * 负责处理断点续传、`.part` 临时文件、复制后校验和最终 promote。
+ * 负责处理断点续传、`.part` 临时文件、复制后校验和最终提升。
  */
 @Slf4j
 @Service
@@ -44,7 +44,7 @@ public class ScalableFileCopyService {
     private final TransferProperties transferProperties;
     /** 文件校验服务。 */
     private final FileIntegrityService fileIntegrityService;
-    /** 线程级直接内存缓冲区缓存，避免每次复制都新建 ByteBuffer。 */
+    /** 线程级直接内存缓冲区缓存，避免每次复制都新建字节缓冲区。 */
     private final ThreadLocal<ByteBuffer> directBufferCache = new ThreadLocal<>();
 
     /**
@@ -117,7 +117,7 @@ public class ScalableFileCopyService {
             }
 
             if (absoluteOffset >= sourceSize) {
-                // 已经复制到文件尾时，只需要做校验和 promote。
+                // 已经复制到文件尾时，只需要做校验和提升。
                 String targetHash = verifyAndPromote(
                         sourceFile,
                         partFile,
@@ -197,7 +197,7 @@ public class ScalableFileCopyService {
                 buffer.flip();
                 int written = 0;
                 while (buffer.hasRemaining()) {
-                    // FileChannel 可能一次写不完，所以这里循环直到当前缓冲区全部落盘。
+                    // 文件通道可能一次写不完，所以这里循环直到当前缓冲区全部落盘。
                     int bytesWritten = targetChannel.write(buffer, position + written);
                     if (bytesWritten <= 0) {
                         throw new IOException("Failed to write to temporary file: " + partFile);
@@ -302,7 +302,7 @@ public class ScalableFileCopyService {
         }
         promote(partFile, targetFile, sourceLastModifiedMillis);
         if (verificationMode == VerificationMode.SIZE_AND_MTIME
-                // promote 之后还要再次确认目标文件的修改时间已经恢复正确。
+                // 提升为正式目标文件后，还要再次确认修改时间已经恢复正确。
                 && Files.getLastModifiedTime(targetFile).toMillis() != sourceLastModifiedMillis) {
             throw new TransferException("File mtime mismatch detected for file: " + sourceFile);
         }
@@ -318,7 +318,7 @@ public class ScalableFileCopyService {
     }
 
     private Path resolvePartFile(Path targetFile) {
-        // 目标文件的临时续传文件统一采用同级目录下追加 .part 后缀的命名方式。
+        // 目标文件的临时续传文件统一采用同级目录下追加 `.part` 后缀的命名方式。
         String fileName = targetFile.getFileName().toString() + ".part";
         return targetFile.resolveSibling(fileName);
     }

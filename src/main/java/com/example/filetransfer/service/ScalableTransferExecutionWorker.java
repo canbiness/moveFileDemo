@@ -33,9 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Background worker that executes a planned transfer task. It rebuilds the
- * dispatch queue from persisted batches, enforces backpressure, and copies
- * files with retry, pause, and cancel support.
+ * 执行已规划迁移任务的后台工作器。
+ * 负责从持久化批次重建派发队列、执行背压控制，并支持重试、暂停和取消。
  */
 @Slf4j
 @Service
@@ -81,7 +80,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Starts execution on the coordinator pool so the HTTP request can return immediately.
+     * 在协调线程池中启动执行，让接口请求可以立即返回。
      */
     @Async("transferCoordinatorExecutor")
     public CompletableFuture<Void> executeAsync(String taskId, ReentrantLock lock) {
@@ -119,7 +118,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Runs the full batch scheduling loop for a single task.
+     * 运行单个任务的完整批次调度流程。
      */
     private void runExecution(String taskId) {
         TransferTask task = statePersistenceService.getTask(taskId);
@@ -193,7 +192,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Processes a single batch and updates batch-level state transitions.
+     * 处理单个批次并更新批次级状态流转。
      */
     private void processBatch(String taskId,
                               TransferTask task,
@@ -247,7 +246,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Pages through all runnable file records in the batch.
+     * 分页处理批次中所有可执行的文件记录。
      */
     private void processFileRecords(String taskId,
                                     TransferTask task,
@@ -301,7 +300,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Copies a single file record and updates file-level state.
+     * 复制单条文件记录并更新文件级状态。
      */
     private void processSingleRecord(String taskId,
                                      TransferTask task,
@@ -382,7 +381,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Copies one file with exponential backoff retries.
+     * 以指数退避方式重试复制单个文件。
      */
     private ScalableFileCopyService.CopyResult copyFileWithRetry(String taskId,
                                                                  TransferTask task,
@@ -442,7 +441,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Limits debug progress logs for large files.
+     * 限制大文件的调试进度日志频率。
      */
     private boolean shouldLogFileProgress(ScalableFileRecord record,
                                           long absoluteTransferred,
@@ -456,7 +455,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Rebuilds the in-memory or Redis-backed dispatch queue from persisted batch state.
+     * 根据已持久化的批次状态重建内存或 Redis 驱动的派发队列。
      */
     private void rebuildDispatchQueue(String taskId, List<BatchStatus> statuses, int pageSize) {
         dispatchQueueStore.clearTask(taskId);
@@ -475,7 +474,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Restores the repository results to the original queue order.
+     * 将查询结果恢复为原始队列顺序。
      */
     private List<TransferBatch> loadBatchesByIds(List<Long> batchIds) {
         Map<Long, TransferBatch> batchMap = new HashMap<>();
@@ -503,7 +502,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Persists batch progress periodically instead of on every file completion.
+     * 按周期持久化批次进度，而不是在每个文件完成时都写库。
      */
     private void persistBatchProgressIfNeeded(TransferBatch batch,
                                               long currentBatchBytes,
@@ -521,7 +520,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Checks for pause or cancel signals at safe checkpoints.
+     * 在安全检查点检查暂停或取消信号。
      */
     private void checkpointControl(String taskId) {
         if (scalableTaskControlService.isCancelRequested(taskId)) {
@@ -533,7 +532,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Sleeps for backoff or throttle delays.
+     * 按退避或限流时长进入休眠。
      */
     private void sleepBackoff(long backoffMillis) {
         try {
@@ -545,7 +544,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Waits for the current dispatch round to finish and rethrows the first failure.
+     * 等待当前派发轮次结束，并重新抛出首个失败异常。
      */
     private void waitForBatches(String taskId, List<CompletableFuture<Void>> batchFutures, AtomicBoolean aborted) {
         List<Throwable> failures = new ArrayList<>(1);
@@ -571,7 +570,7 @@ public class ScalableTransferExecutionWorker {
     }
 
     /**
-     * Validates that the task is in an executable state.
+     * 校验任务是否处于可执行状态。
      */
     private void validateTaskState(TransferTask task) {
         if (task.getStatus() == TransferStatus.COMPLETED || task.getStatus() == TransferStatus.CANCELED) {

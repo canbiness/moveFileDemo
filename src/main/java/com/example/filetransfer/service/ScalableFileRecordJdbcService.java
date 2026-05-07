@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * MyBatis-based file-record batch read/write service.
+ * 基于 MyBatis 的文件记录批量读写服务。
  */
 @Service
 public class ScalableFileRecordJdbcService {
