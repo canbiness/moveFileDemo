@@ -1,6 +1,10 @@
 spring:
   application:
     name: file-transfer-system
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration/postgresql
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:5432/canbinesss}
     driver-class-name: org.postgresql.Driver

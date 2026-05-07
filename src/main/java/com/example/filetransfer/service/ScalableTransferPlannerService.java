@@ -87,6 +87,7 @@ public class ScalableTransferPlannerService {
 
         // 先创建任务主记录，并把状态置为 PLANNING，表示已经接单但尚未规划完成。
         TransferTask task = statePersistenceService.saveTask(TransferTask.builder()
+                .taskName(resolveTaskName(source, target))
                 .sourcePath(source.toString())
                 .targetPath(target.toString())
                 .transferType(TransferType.DIRECTORY)
@@ -119,6 +120,18 @@ public class ScalableTransferPlannerService {
                 resolvedMode,
                 "Planning started asynchronously. Poll the task summary until status becomes PLANNED."
         );
+    }
+
+    private String resolveTaskName(Path source, Path target) {
+        Path sourceName = source.getFileName();
+        Path targetName = target.getFileName();
+        if (sourceName != null && targetName != null) {
+            return sourceName + " -> " + targetName;
+        }
+        if (sourceName != null) {
+            return sourceName.toString();
+        }
+        return source.toString();
     }
 
     private void schedulePlanning(String taskId, Path source, Path target, VerificationMode verificationMode) {

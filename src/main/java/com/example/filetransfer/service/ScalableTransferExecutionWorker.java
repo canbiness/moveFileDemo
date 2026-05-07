@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +52,7 @@ public class ScalableTransferExecutionWorker {
     private final DispatchQueueStore dispatchQueueStore;
     private final TransferBatchMapper transferBatchMapper;
     private final ScalableFileRecordMapper scalableFileRecordMapper;
+    private final TransferExecutionRecordService transferExecutionRecordService;
     private final ThreadPoolTaskExecutor transferExecutor;
 
     public ScalableTransferExecutionWorker(TransferProperties transferProperties,
@@ -64,6 +66,7 @@ public class ScalableTransferExecutionWorker {
                                            DispatchQueueStore dispatchQueueStore,
                                            TransferBatchMapper transferBatchMapper,
                                            ScalableFileRecordMapper scalableFileRecordMapper,
+                                           TransferExecutionRecordService transferExecutionRecordService,
                                            @Qualifier("transferExecutor") ThreadPoolTaskExecutor transferExecutor) {
         this.transferProperties = transferProperties;
         this.statePersistenceService = statePersistenceService;
@@ -76,6 +79,7 @@ public class ScalableTransferExecutionWorker {
         this.dispatchQueueStore = dispatchQueueStore;
         this.transferBatchMapper = transferBatchMapper;
         this.scalableFileRecordMapper = scalableFileRecordMapper;
+        this.transferExecutionRecordService = transferExecutionRecordService;
         this.transferExecutor = transferExecutor;
     }
 
@@ -86,21 +90,34 @@ public class ScalableTransferExecutionWorker {
     public CompletableFuture<Void> executeAsync(String taskId, ReentrantLock lock) {
         log.info("Starting transfer execution, taskId={}", taskId);
         scalableRuntimeMonitorService.markTaskStarted(taskId, "temperature-priority-backpressure");
+        LocalDateTime startedAt = LocalDateTime.now();
+        var startProgress = statePersistenceService.getProgress(taskId);
+        long startingTransferredBytes = startProgress.getTransferredBytes();
+        long startingCompletedFiles = startProgress.getCompletedFileCount();
+        TransferStatus finalStatus = TransferStatus.RUNNING;
+        String finalError = null;
         try {
             runExecution(taskId);
+            finalStatus = TransferStatus.COMPLETED;
             log.info("Transfer execution completed, taskId={}", taskId);
             return CompletableFuture.completedFuture(null);
         } catch (TaskPauseRequestedException ex) {
+            finalStatus = TransferStatus.PAUSED;
+            finalError = ex.getMessage();
             log.info("Transfer execution paused, taskId={}, message={}", taskId, ex.getMessage());
             executionStateService.flushBufferedFileStatuses(taskId);
             executionStateService.updateTaskStatus(taskId, TransferStatus.PAUSED, ex.getMessage());
             return CompletableFuture.completedFuture(null);
         } catch (TaskCancelRequestedException ex) {
+            finalStatus = TransferStatus.CANCELED;
+            finalError = ex.getMessage();
             log.info("Transfer execution canceled, taskId={}, message={}", taskId, ex.getMessage());
             executionStateService.flushBufferedFileStatuses(taskId);
             executionStateService.updateTaskStatus(taskId, TransferStatus.CANCELED, ex.getMessage());
             return CompletableFuture.completedFuture(null);
         } catch (Exception ex) {
+            finalStatus = TransferStatus.FAILED;
+            finalError = ex.getMessage();
             log.error("Transfer execution failed, taskId={}", taskId, ex);
             executionStateService.flushBufferedFileStatuses(taskId);
             try {
@@ -110,6 +127,18 @@ public class ScalableTransferExecutionWorker {
             }
             return CompletableFuture.failedFuture(ex);
         } finally {
+            try {
+                transferExecutionRecordService.recordExecution(
+                        taskId,
+                        startedAt,
+                        startingTransferredBytes,
+                        startingCompletedFiles,
+                        finalStatus,
+                        finalError
+                );
+            } catch (Exception recordEx) {
+                log.error("Failed to persist transfer execution record, taskId={}", taskId, recordEx);
+            }
             scalableRuntimeMonitorService.markTaskFinished(taskId);
             scalableTaskControlService.clearSignals(taskId);
             lock.unlock();

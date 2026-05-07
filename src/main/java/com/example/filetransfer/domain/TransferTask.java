@@ -29,6 +29,7 @@ public class TransferTask {
     /** 任务唯一标识，对外作为接口主键使用。 */
     @TableId(type = IdType.ASSIGN_UUID)
     private String id;
+    private String taskName;
 
     /** 乐观锁版本号，用于避免并发更新覆盖。 */
     @Version
