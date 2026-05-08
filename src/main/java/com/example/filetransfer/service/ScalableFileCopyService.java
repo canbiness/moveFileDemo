@@ -88,6 +88,7 @@ public class ScalableFileCopyService {
             );
             if (existingTargetState.valid()) {
                 Files.deleteIfExists(partFile);
+                deleteSourceFile(sourceFile, targetFile, sourceRoot);
                 // 如果数据库进度还没追到终点，这里补发一笔进度，让上层状态对齐到完成态。
                 long delta = Math.max(0L, sourceSize - persistedOffset);
                 if (delta > 0) {
@@ -119,6 +120,7 @@ public class ScalableFileCopyService {
             if (absoluteOffset >= sourceSize) {
                 // 已经复制到文件尾时，只需要做校验和提升。
                 String targetHash = verifyAndPromote(
+                        sourceRoot,
                         sourceFile,
                         partFile,
                         targetFile,
@@ -134,6 +136,7 @@ public class ScalableFileCopyService {
                 Files.deleteIfExists(partFile);
                 Files.createFile(partFile);
                 String targetHash = verifyAndPromote(
+                        sourceRoot,
                         sourceFile,
                         partFile,
                         targetFile,
@@ -154,6 +157,7 @@ public class ScalableFileCopyService {
                     progressListener
             );
             String targetHash = verifyAndPromote(
+                    sourceRoot,
                     sourceFile,
                     partFile,
                     targetFile,
@@ -276,7 +280,8 @@ public class ScalableFileCopyService {
     /**
      * 校验临时文件并提升为最终目标文件。
      */
-    private String verifyAndPromote(Path sourceFile,
+    private String verifyAndPromote(Path sourceRoot,
+                                    Path sourceFile,
                                     Path partFile,
                                     Path targetFile,
                                     VerificationMode verificationMode,
@@ -293,6 +298,7 @@ public class ScalableFileCopyService {
                 throw new TransferException("Hash mismatch detected for file: " + sourceFile);
             }
             promote(partFile, targetFile, sourceLastModifiedMillis);
+            deleteSourceFile(sourceFile, targetFile, sourceRoot);
             return targetHash;
         }
 
@@ -301,6 +307,7 @@ public class ScalableFileCopyService {
             throw new TransferException("File size mismatch detected for file: " + sourceFile);
         }
         promote(partFile, targetFile, sourceLastModifiedMillis);
+        deleteSourceFile(sourceFile, targetFile, sourceRoot);
         if (verificationMode == VerificationMode.SIZE_AND_MTIME
                 // 提升为正式目标文件后，还要再次确认修改时间已经恢复正确。
                 && Files.getLastModifiedTime(targetFile).toMillis() != sourceLastModifiedMillis) {
@@ -315,6 +322,26 @@ public class ScalableFileCopyService {
     private void promote(Path partFile, Path targetFile, long sourceLastModifiedMillis) throws IOException {
         Files.move(partFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
         Files.setLastModifiedTime(targetFile, FileTime.fromMillis(sourceLastModifiedMillis));
+    }
+
+    private void deleteSourceFile(Path sourceFile, Path targetFile, Path sourceRoot) throws IOException {
+        if (sourceFile.equals(targetFile)) {
+            return;
+        }
+        Files.deleteIfExists(sourceFile);
+        cleanupEmptyParents(sourceFile.getParent(), sourceRoot);
+    }
+
+    private void cleanupEmptyParents(Path start, Path stopExclusive) throws IOException {
+        Path current = start;
+        while (current != null && !current.equals(stopExclusive)) {
+            try {
+                Files.delete(current);
+            } catch (java.nio.file.DirectoryNotEmptyException ex) {
+                break;
+            }
+            current = current.getParent();
+        }
     }
 
     private Path resolvePartFile(Path targetFile) {

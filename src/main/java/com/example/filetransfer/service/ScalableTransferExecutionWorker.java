@@ -394,6 +394,7 @@ public class ScalableTransferExecutionWorker {
             executionStateService.updateBatchStatus(batch.getId(), BatchStatus.CANCELED, batchTransferredBytes.get(), ex.getMessage());
             throw ex;
         } catch (Exception ex) {
+            // 单个文件失败时只标记该文件和当前批次出现过失败，继续处理后续文件。
             executionStateService.updateFileStatus(
                     record.getId(),
                     taskId,
@@ -402,8 +403,9 @@ public class ScalableTransferExecutionWorker {
                     ex.getMessage(),
                     null
             );
-            executionStateService.updateBatchStatus(batch.getId(), BatchStatus.FAILED, batchTransferredBytes.get(), ex.getMessage());
-            throw new TransferException("File execution failed: " + record.getRelativePath(), ex);
+            executionStateService.updateBatchStatus(batch.getId(), BatchStatus.RUNNING, batchTransferredBytes.get(), ex.getMessage());
+            log.warn("File execution failed but batch will continue, taskId={}, batchId={}, recordId={}, relativePath={}",
+                    taskId, batch.getId(), record.getId(), record.getRelativePath(), ex);
         } finally {
             scalableRuntimeMonitorService.onFileFinished(taskId);
         }
