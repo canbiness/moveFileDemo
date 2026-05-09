@@ -1,16 +1,12 @@
 package com.example.filetransfer.controller;
 
 import com.example.filetransfer.config.TransferProperties;
-import com.example.filetransfer.dto.CreateScalableTransferPlanRequest;
-import com.example.filetransfer.dto.ScalableTransferActionResponse;
-import com.example.filetransfer.dto.ScalableTransferBatchPageResponse;
-import com.example.filetransfer.dto.ScalableTransferMetricsResponse;
-import com.example.filetransfer.dto.ScalableTransferPlanResponse;
-import com.example.filetransfer.dto.ScalableTransferTaskSummaryResponse;
+import com.example.filetransfer.domain.DataTransferJob;
+import com.example.filetransfer.domain.DataTransferRule;
+import com.example.filetransfer.domain.VerificationMode;
+import com.example.filetransfer.dto.*;
 import com.example.filetransfer.exception.TransferException;
-import com.example.filetransfer.service.ScalableTransferExecutionService;
-import com.example.filetransfer.service.ScalableTransferPlannerService;
-import com.example.filetransfer.service.ScalableTransferQueryService;
+import com.example.filetransfer.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +42,10 @@ public class ScalableTransferController {
     /** 负责查询摘要、指标和批次分页。 */
     private final ScalableTransferQueryService scalableTransferQueryService;
 
+    private final DataTransferJobService dataTransferJobService;
+
+    private final DataTransferRuleService dataTransferRuleService;
+
     /**
      * 创建迁移计划。
      * 该接口只负责接收请求和快速返回，真正的目录扫描与切批在后台异步执行。
@@ -55,13 +55,17 @@ public class ScalableTransferController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public ScalableTransferPlanResponse createPlan(@Valid @RequestBody CreateScalableTransferPlanRequest request) {
+    public ScalableTransferPlanResponse createPlan(@Valid @RequestBody DataTransferJobPlanResponse request) {
+        Long id = request.jobId();
+        DataTransferJob dataTransferJob = dataTransferJobService.requireById(id);
+        Long ruleId = dataTransferJob.getRuleId();
+        DataTransferRule dataTransferRule = dataTransferRuleService.getById(ruleId);
         log.info("Received create-plan request, sourcePath={}, targetPath={}, verificationMode={}",
-                request.sourcePath(), request.targetPath(), request.verificationMode());
+                dataTransferRule.getPath(), dataTransferRule.getTargetPath(), VerificationMode.SIZE_AND_MTIME);
         return scalableTransferPlannerService.createPlan(
-                request.sourcePath(),
-                request.targetPath(),
-                request.verificationMode()
+                dataTransferRule.getPath(),
+                dataTransferRule.getTargetPath(),
+                VerificationMode.SIZE_AND_MTIME
         );
     }
 
